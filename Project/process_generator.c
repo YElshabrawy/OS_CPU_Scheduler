@@ -1,4 +1,5 @@
 #include "headers.h"
+#include <string.h>
 
 void clearResources(int);
 void createClk();
@@ -47,11 +48,54 @@ void readInputFile(){
     }
 
     printf("\nReading the input file...\n");
+    struct Queue *Process_q = createQueue();
     char line[256];
     while (fgets(line, sizeof(line), fptr))
     {
         if(line[0] != '#'){
-            printf("%s", line);
+            char* token;
+            char* rest = line;
+            int i = 1;
+            struct ProcessInfo p;
+
+            while ((token = strtok_r(rest, "\t", &rest)))
+            {
+                switch (i)
+                {
+                    case 1:
+                        {
+                        p.id = atoi(token);
+                        break;
+                        }
+                    
+                    case 2:
+                    {
+                        p.arrival_time = atoi(token);
+                        break;
+                    }
+
+                    case 3:
+                    {
+                        p.runtime = atoi(token);
+                        break;
+                    }
+                    
+                    case 4:
+                    {
+                        // Insert into Data Structure
+                        p.priority = atoi(token);
+                        break;
+                    }
+                    
+                    default:
+                        break;
+                }
+                i++;
+            }
+
+            enQueue(Process_q, &p);
+            printf("\nQueue Front : %d \n", (Process_q->front->key)->id);
+            printf("\nQueue Rear : %d\n", (Process_q->rear->key)->id);
         }
     }
 }

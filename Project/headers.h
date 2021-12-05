@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <limits.h>
 
 typedef short bool;
 #define true 1
@@ -65,3 +66,139 @@ void destroyClk(bool terminateAll)
         killpg(getpgrp(), SIGINT);
     }
 }
+
+struct ProcessInfo
+{
+    int id;
+    int arrival_time;
+    int runtime;
+    int priority;
+};
+
+struct QNode
+{
+    struct ProcessInfo* key;
+    struct QNode *next;
+};
+
+struct Queue
+{
+    struct QNode *front, *rear;
+};
+
+struct QNode *newNode(struct ProcessInfo* k)
+{
+    struct QNode *temp = (struct QNode *)malloc(sizeof(struct QNode));
+    temp->key = k;
+    temp->next = NULL;
+    return temp;
+}
+
+struct Queue *createQueue()
+{
+    struct Queue *q = (struct Queue *)malloc(sizeof(struct Queue));
+    q->front = q->rear = NULL;
+    return q;
+}
+
+void enQueue(struct Queue *q, struct ProcessInfo * k)
+{
+    // Create a new LL node
+    struct QNode *temp = newNode(k);
+
+    // If queue is empty, then new node is front and rear both
+    if (q->rear == NULL)
+    {
+        q->front = q->rear = temp;
+        return;
+    }
+
+    // Add the new node at the end of queue and change rear
+    q->rear->next = temp;
+    q->rear = temp;
+}
+
+void deQueue(struct Queue *q)
+{
+    // If queue is empty, return NULL.
+    if (q->front == NULL)
+        return;
+
+    // Store previous front and move front one node ahead
+    struct QNode *temp = q->front;
+
+    q->front = q->front->next;
+
+    // If front becomes NULL, then change rear also as NULL
+    if (q->front == NULL)
+        q->rear = NULL;
+
+    free(temp);
+}
+
+// // Queue of structs
+// struct Queue
+// {
+//     int front, rear, size;
+//     unsigned capacity;
+//     struct ProcessInfo* *array;
+// };
+
+// struct Queue *createQueue(unsigned capacity)
+// {
+//     struct Queue *queue = (struct Queue *)malloc(
+//         sizeof(struct Queue));
+//     queue->capacity = capacity;
+//     queue->front = queue->size = 0;
+
+//     // This is important, see the enqueue
+//     queue->rear = capacity - 1;
+//     queue->array = (int *)malloc(
+//         queue->capacity * sizeof(int));
+//     return queue;
+// }
+
+// int isFull(struct Queue *queue)
+// {
+//     return (queue->size == queue->capacity);
+// }
+
+// // Queue is empty when size is 0
+// int isEmpty(struct Queue *queue)
+// {
+//     return (queue->size == 0);
+// }
+
+// void enqueue(struct Queue *queue, struct ProcessInfo* item)
+// {
+//     if (isFull(queue))
+//         return;
+//     queue->rear = (queue->rear + 1) % queue->capacity;
+//     queue->array[queue->rear] = item;
+//     queue->size = queue->size + 1;
+// }
+
+// struct ProcessInfo* dequeue(struct Queue *queue)
+// {
+//     if (isEmpty(queue))
+//         return NULL;
+//     struct ProcessInfo* item = queue->array[queue->front];
+//     queue->front = (queue->front + 1) % queue->capacity;
+//     queue->size = queue->size - 1;
+//     return item;
+// }
+
+// struct ProcessInfo* front(struct Queue *queue)
+// {
+//     if (isEmpty(queue))
+//         return NULL;
+//     return queue->array[queue->front];
+// }
+
+// // Function to get rear of queue
+// struct ProcessInfo* rear(struct Queue *queue)
+// {
+//     if (isEmpty(queue))
+//         return NULL;
+//     return queue->array[queue->rear];
+// }
