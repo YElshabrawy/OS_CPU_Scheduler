@@ -6,6 +6,11 @@ void createClk();
 void createSch();
 cvector_vector_type(struct ProcessInfo) readInputFile();
 
+struct msgbuff_process{
+    long mtype;
+    struct ProcessInfo PI;
+};
+
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
@@ -67,23 +72,35 @@ int main(int argc, char *argv[])
     int oldx = -1; // to track seconds
     while(1){
         int x = getClk();
-        if(oldx != x){
+        //if(oldx != x){
             // A second passed
-            printf("current time is %d\n", x);
+            //printf("current time is %d, size = %ld\n", x, cvector_size(processVector));
             // check if a process has arrived
             if(processVector){
                 for (int i = 0; i < cvector_size(processVector); i++)
                 {
                     if (processVector[i].arrival_time == x){
+                        // send it in a msg Q
+                        key_t msgQ_ID = msgget(777, IPC_CREAT | 0644);
+                        struct msgbuff_process M;
+                        M.mtype = processVector[i].id;
+                        M.PI = processVector[i];
+
+                        int send_val = msgsnd(msgQ_ID, &M, sizeof(M.PI), !IPC_NOWAIT);
+                        if(send_val == -1)
+                            perror("Errror in send");
+                        
+
+
                         printf("Process %d arrived\n", processVector[i].id);
                         cvector_erase(processVector, i);
                         printf("The size =%ld\n", cvector_size(processVector));
                     }
                 }
             }
-            oldx = x;
+            //oldx = x;
 
-        }
+        //}
     }
 
     destroyClk(true);
