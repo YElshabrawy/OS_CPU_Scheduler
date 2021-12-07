@@ -12,6 +12,9 @@
 #include <signal.h>
 #include <limits.h>
 
+#include "cvector.h"
+#define CVECTOR_LOGARITHMIC_GROWTH
+
 typedef short bool;
 #define true 1
 #define false 1

@@ -3,15 +3,28 @@
 
 void clearResources(int);
 void createClk();
-void readInputFile();
+cvector_vector_type(struct ProcessInfo) readInputFile();
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
     // TODO Initialization
     printf("\n~ Process Generator starting ~\n");
     // 1. Read the input files.
-    readInputFile();
+    cvector_vector_type(struct ProcessInfo) processVector = NULL;
+    processVector = readInputFile();
+
+    if (processVector)
+    {
+        for (int i = 0; i < cvector_size(processVector); i++)
+        {
+            printf("\nFor process #%d\n", i + 1);
+            printf("\nProcess ID = %d\n", processVector[i].id);
+            printf("Process AT = %d\n", processVector[i].arrival_time);
+            printf("Process RT = %d\n", processVector[i].runtime);
+            printf("Process P = %d\n", processVector[i].priority);
+        }
+    }
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
 
     // 3. Initiate and create the scheduler and clock processes.
@@ -38,7 +51,8 @@ void createClk() {
     execve(args[0], args, NULL);
 }
 
-void readInputFile(){
+cvector_vector_type(struct ProcessInfo) readInputFile()
+{
     FILE *fptr;
     // Handle not found
     if ((fptr = fopen("./processes.txt", "r")) == NULL)
@@ -48,7 +62,8 @@ void readInputFile(){
     }
 
     printf("\nReading the input file...\n");
-    struct Queue *Process_q = createQueue();
+    cvector_vector_type(struct ProcessInfo) processVector = NULL;
+
     char line[256];
     while (fgets(line, sizeof(line), fptr))
     {
@@ -92,12 +107,10 @@ void readInputFile(){
                 }
                 i++;
             }
-
-            enQueue(Process_q, &p);
-            printf("\nQueue Front : %d \n", (Process_q->front->key)->id);
-            printf("\nQueue Rear : %d\n", (Process_q->rear->key)->id);
+            cvector_push_back(processVector, p);
         }
     }
+    return processVector;
 }
 
 void clearResources(int signum)
