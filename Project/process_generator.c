@@ -2,19 +2,16 @@
 #include <string.h>
 
 void clearResources(int);
+void handleAlarm(int);
 void createClk();
 void createSch();
 cvector_vector_type(struct ProcessInfo) readInputFile();
 
-struct msgbuff_process{
-    long mtype;
-    struct ProcessInfo PI;
-};
+pid_t clk_pid, sch_pid;
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
-    // TODO Initialization
     printf("\n~ Process Generator starting ~\n");
 
     // 1. Read the input files.
@@ -28,84 +25,86 @@ int main(int argc, char *argv[])
     printf("3 => Round Robin (RR)\n");
     printf("Other => Quit\n");
     printf("Choice: ");
-    int choice;
-    scanf("%d", &choice);
-    if(choice == 1)
+    // Not int but will be coonverted "to send in execl"
+    char choice[8];
+    char Q[8]; // RR Quantum
+
+    fgets(choice, 8, stdin);
+    //scanf("%d", &choice);
+    if(atoi(choice) == 1)
     {
         // HPF
         printf("\nStarting HPF Algorithm\n");
 
     }
-    else if(choice == 2)
+    else if(atoi(choice) == 2)
     {
         // SRTN
         printf("\nStarting SRTN Algorithm\n");
     }
-    else if(choice == 3)
+    else if(atoi(choice) == 3)
     {
         // RR
         printf("Quantum: ");
-        int Q;
-        if(!scanf("%d", &Q))
-            exit(0);
+        fgets(Q, 8, stdin);
 
-        printf("\nStarting RR Algorithm with Q = %d\n", Q);
+        printf("\nStarting RR Algorithm with Q = %d\n", atoi(Q));
     }
     else
         exit(0);
 
-
-    // 3. Initiate and create the scheduler and clock processes.
-    int pid = fork();
-    if(pid == -1)
-        perror("error in fork");
-    else if(pid == 0)
-        createClk();
-
-    int pid2 = fork();
-    if (pid2 == -1)
-        perror("error in fork");
-    else if (pid2 == 0)
-        createSch();
-
-    initClk();
-    int oldx = -1; // to track seconds
-    while(1){
-        int x = getClk();
-        //if(oldx != x){
-            // A second passed
-            //printf("current time is %d, size = %ld\n", x, cvector_size(processVector));
-            // check if a process has arrived
-            if(processVector){
-                for (int i = 0; i < cvector_size(processVector); i++)
-                {
-                    if (processVector[i].arrival_time == x){
-                        // send it in a msg Q
-                        key_t msgQ_ID = msgget(777, IPC_CREAT | 0644);
-                        struct msgbuff_process M;
-                        M.mtype = processVector[i].id;
-                        M.PI = processVector[i];
-
-                        int send_val = msgsnd(msgQ_ID, &M, sizeof(M.PI), !IPC_NOWAIT);
-                        if(send_val == -1)
-                            perror("Errror in send");
-                        
-
-
-                        printf("Process %d arrived\n", processVector[i].id);
-                        cvector_erase(processVector, i);
-                        printf("The size =%ld\n", cvector_size(processVector));
+    // 3. Creating the clock and scheduler
+    clk_pid = fork();
+    if(clk_pid == 0){
+        printf("\n[PG] Starting the clock\n");
+        execl("./clk.out", "./clk.out", NULL);
+    } 
+    else{
+        sch_pid = fork();
+        if(sch_pid == 0){
+            // not RR
+            printf("\n[PG] Starting the scheduler\n");
+            if(atoi(choice) != 3)
+                execl("./scheduler.out", "./scheduler.out", choice, NULL);
+            else
+                execl("./scheduler.out", "./scheduler.out", choice, Q, NULL);
+        }
+        else{
+            // Main Parent
+            key_t msgQ_ID = msgget(777, IPC_CREAT | 0644);
+            initClk();
+            bool end_flag = 0;
+            while(1){
+                if(!end_flag){
+                    int currentStep = getClk();
+                    for (int i = 0; i < cvector_size(processVector); i++){
+                        if (processVector[i].arrival_time <= currentStep)
+                        {
+                            // Arrived ;)
+                            struct msgbuff_process M;
+                            M.mtype = processVector[i].id;
+                            M.PI = processVector[i];
+                            int send_val = msgsnd(msgQ_ID, &M, sizeof(M.PI), !IPC_NOWAIT);
+                            if (send_val == -1)
+                                perror("Errror in send");
+                            else{
+                                printf("\nProcess #%d sent to msgQ at t=%d\n", processVector[i].id, currentStep);
+                                kill(sch_pid, SIGINT);
+                                cvector_erase(processVector, i);
+                            }
+                        }
                     }
+                    if (cvector_size(processVector) == 0){
+                        end_flag = 1;
+                        printf("\nAll process sent to the scheduler\n");
+                    }
+                    sleep(0.1f);
                 }
+                sleep(1);
             }
-            //oldx = x;
-
-        //}
+        }
     }
-
-    destroyClk(true);
-    
-    /*
+        /*
     // 4. Use this function after creating the clock process to initialize clock
     initClk();
         // To get time use this
@@ -118,7 +117,7 @@ int main(int argc, char *argv[])
     // 7. Clear clock resources
     destroyClk(true);
     */
-}
+    }
 
 void createClk() {
     char *args[] = {"./clk.out", NULL};
@@ -194,9 +193,13 @@ cvector_vector_type(struct ProcessInfo) readInputFile()
     return processVector;
 }
 
+void handleAlarm(int signum){
+}
+
 void clearResources(int signum)
 {
     //TODO Clears all resources in case of interruption
     printf("\nProcess Generator terminating!\n");
+    msgctl(msgget(777, 0644), IPC_RMID, NULL);
     exit(0);
 }

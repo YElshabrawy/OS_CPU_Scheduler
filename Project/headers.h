@@ -78,6 +78,12 @@ struct ProcessInfo
     int priority;
 };
 
+struct msgbuff_process
+{
+    long mtype;
+    struct ProcessInfo PI;
+};
+
 struct QNode
 {
     struct ProcessInfo* key;
