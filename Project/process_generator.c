@@ -17,6 +17,10 @@ int main(int argc, char *argv[])
     // 1. Read the input files.
     cvector_vector_type(struct ProcessInfo) processVector = NULL;
     processVector = readInputFile();
+    int numberOfProcesses = cvector_size(processVector);
+    // send it through execl
+    char numberOfProcesses_str[8];
+    sprintf(numberOfProcesses_str, "%d", numberOfProcesses);
 
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
     printf("\nPlease choose the algorithm you want:\n");
@@ -65,9 +69,9 @@ int main(int argc, char *argv[])
             // not RR
             printf("\n[PG] Starting the scheduler\n");
             if(atoi(choice) != 3)
-                execl("./scheduler.out", "./scheduler.out", choice, NULL);
+                execl("./scheduler.out", "./scheduler.out", choice, numberOfProcesses_str, NULL);
             else
-                execl("./scheduler.out", "./scheduler.out", choice, Q, NULL);
+                execl("./scheduler.out", "./scheduler.out", choice, numberOfProcesses_str, Q, NULL);
         }
         else{
             // Main Parent
@@ -88,7 +92,7 @@ int main(int argc, char *argv[])
                             if (send_val == -1)
                                 perror("Errror in send");
                             else{
-                                printf("\nProcess #%d sent to msgQ at t=%d\n", processVector[i].id, currentStep);
+                                //printf("\nProcess #%d sent to msgQ at t=%d\n", processVector[i].id, currentStep);
                                 kill(sch_pid, SIGINT);
                                 cvector_erase(processVector, i);
                             }
@@ -96,7 +100,7 @@ int main(int argc, char *argv[])
                     }
                     if (cvector_size(processVector) == 0){
                         end_flag = 1;
-                        printf("\nAll process sent to the scheduler\n");
+                        //printf("\nAll process sent to the scheduler\n");
                     }
                     sleep(0.1f);
                 }
@@ -171,6 +175,7 @@ cvector_vector_type(struct ProcessInfo) readInputFile()
                     case 3:
                     {
                         p.runtime = atoi(token);
+                        p.remaining_time = atoi(token);
                         break;
                     }
                     
@@ -186,11 +191,15 @@ cvector_vector_type(struct ProcessInfo) readInputFile()
                 }
                 i++;
             }
+            p.sys_pid = -1;
+            p.waiting_time = -1;
             cvector_push_back(processVector, p);
         }
     }
     printf("\nFile imported successfully!\n");
     return processVector;
+
+    fclose(fptr);
 }
 
 void handleAlarm(int signum){
@@ -201,5 +210,8 @@ void clearResources(int signum)
     //TODO Clears all resources in case of interruption
     printf("\nProcess Generator terminating!\n");
     msgctl(msgget(777, 0644), IPC_RMID, NULL);
+    msgctl(msgget(666, 0644), IPC_RMID, NULL);
+    kill(clk_pid, SIGINT);
+    kill(sch_pid, SIGKILL);
     exit(0);
 }

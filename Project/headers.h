@@ -15,6 +15,9 @@
 #include "cvector.h"
 #define CVECTOR_LOGARITHMIC_GROWTH
 
+#include "hash_map.h"
+
+
 typedef short bool;
 #define true 1
 #define false 1
@@ -73,77 +76,87 @@ void destroyClk(bool terminateAll)
 struct ProcessInfo
 {
     int id;
+    pid_t sys_pid;
     int arrival_time;
     int runtime;
     int priority;
+    int remaining_time;
+    int waiting_time;
 };
 
 struct msgbuff_process
 {
+    //777
     long mtype;
     struct ProcessInfo PI;
 };
 
-struct QNode
-{
-    struct ProcessInfo* key;
-    struct QNode *next;
+struct msgbuff_number{
+    //666
+    long mtype;
+    char numberOfProcesses[8];
 };
 
-struct Queue
-{
-    struct QNode *front, *rear;
-};
+// struct QNode
+// {
+//     struct ProcessInfo* key;
+//     struct QNode *next;
+// };
 
-struct QNode *newNode(struct ProcessInfo* k)
-{
-    struct QNode *temp = (struct QNode *)malloc(sizeof(struct QNode));
-    temp->key = k;
-    temp->next = NULL;
-    return temp;
-}
+// struct Queue
+// {
+//     struct QNode *front, *rear;
+// };
 
-struct Queue *createQueue()
-{
-    struct Queue *q = (struct Queue *)malloc(sizeof(struct Queue));
-    q->front = q->rear = NULL;
-    return q;
-}
+// struct QNode *newNode(struct ProcessInfo* k)
+// {
+//     struct QNode *temp = (struct QNode *)malloc(sizeof(struct QNode));
+//     temp->key = k;
+//     temp->next = NULL;
+//     return temp;
+// }
 
-void enQueue(struct Queue *q, struct ProcessInfo * k)
-{
-    // Create a new LL node
-    struct QNode *temp = newNode(k);
+// struct Queue *createQueue()
+// {
+//     struct Queue *q = (struct Queue *)malloc(sizeof(struct Queue));
+//     q->front = q->rear = NULL;
+//     return q;
+// }
 
-    // If queue is empty, then new node is front and rear both
-    if (q->rear == NULL)
-    {
-        q->front = q->rear = temp;
-        return;
-    }
+// void enQueue(struct Queue *q, struct ProcessInfo * k)
+// {
+//     // Create a new LL node
+//     struct QNode *temp = newNode(k);
 
-    // Add the new node at the end of queue and change rear
-    q->rear->next = temp;
-    q->rear = temp;
-}
+//     // If queue is empty, then new node is front and rear both
+//     if (q->rear == NULL)
+//     {
+//         q->front = q->rear = temp;
+//         return;
+//     }
 
-void deQueue(struct Queue *q)
-{
-    // If queue is empty, return NULL.
-    if (q->front == NULL)
-        return;
+//     // Add the new node at the end of queue and change rear
+//     q->rear->next = temp;
+//     q->rear = temp;
+// }
 
-    // Store previous front and move front one node ahead
-    struct QNode *temp = q->front;
+// void deQueue(struct Queue *q)
+// {
+//     // If queue is empty, return NULL.
+//     if (q->front == NULL)
+//         return;
 
-    q->front = q->front->next;
+//     // Store previous front and move front one node ahead
+//     struct QNode *temp = q->front;
 
-    // If front becomes NULL, then change rear also as NULL
-    if (q->front == NULL)
-        q->rear = NULL;
+//     q->front = q->front->next;
 
-    free(temp);
-}
+//     // If front becomes NULL, then change rear also as NULL
+//     if (q->front == NULL)
+//         q->rear = NULL;
+
+//     free(temp);
+// }
 
 // // Queue of structs
 // struct Queue
