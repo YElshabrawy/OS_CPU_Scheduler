@@ -4,13 +4,19 @@
 void HPF();
 void HPF2();
 void SRTN();
-void RR();
+void RR(int);
 void clearResources(int);
 void sigIntHandler(int);
 void sigChlidHandler(int);
 
 int algo;
 int remainingProcesses = -1; // to indicate when the scheduler will terminate if == 0
+
+//Round Robin
+cvector_vector_type(struct ProcessInfo) RR_Array = NULL;
+int processStartTime = -1; // To help in RR
+int RR_Process_index = 0; // To switch between processes
+int RR_finish_flag = 0;
 
 int stopSchFlag = 0; // Stops the scheduler at end
 int runningFlag = 0; // Indicates if its currently running or not;
@@ -35,6 +41,17 @@ int main(int argc, char * argv[])
     signal(SIGINT, sigIntHandler);
     signal(SIGCHLD, sigChlidHandler);
 
+    // Handle not to call sigchild on stop
+    struct sigaction act;
+    act.sa_handler = sigChlidHandler;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = SA_NOCLDSTOP;
+    if (sigaction(SIGCHLD, &act, 0) == -1)
+    {
+        perror("sigaction");
+        exit(1);
+    }
+
     logsFile = fopen("./Output/Scheduler.log", "w");
     prefFile = fopen("./Output/Scheduler.pref", "w");
 
@@ -57,8 +74,11 @@ int main(int argc, char * argv[])
         HPF2();
     else if(algo == 2)
         SRTN();
-    else if(algo == 3)
-        RR();
+    else if(algo == 3){
+        int Q;
+        sscanf(argv[3], "%d", &Q);
+        RR(Q);
+    }
 
     // Calculate the pref data :3
     float CPU_util = (float)total_runtime / (float)getClk() * 100.0f;
@@ -216,7 +236,8 @@ void HPF2(){
             else
                 continue;
         }
-        else{
+        else
+        {
             if(!runningFlag){
                 runningFlag = 1;
                 // get the lowest priority in the q
@@ -261,7 +282,102 @@ void HPF2(){
     printf("\nAna 5latht :3\n");
 }
 
-void RR(){}
+void RR(int Quantum){
+    int Q = Quantum;
+    printf("\n== Starting RR Q=%d work ==\n", Q);
+
+    while(1){
+        sleep(0.1f);
+        // Handle finish
+        if(cvector_empty(readyQ)){
+            // Handle
+            stopSchFlag = (remainingProcesses == 0);
+            if (stopSchFlag)
+                break;
+            else
+                continue;
+        }
+        else
+        {
+            if(processStartTime == -1){
+                // Ready to run
+                currentProcess = readyQ[RR_Process_index];
+                RR_Process_index = (RR_Process_index + 1) % cvector_size(readyQ); // Lw fyh new process fl Q hana5odha next
+
+                if(readyQ[RR_Process_index].sys_pid == -2)
+                    continue; // finished already
+                if(readyQ[RR_Process_index].sys_pid == -1)
+                {
+                    // Has not forked yet
+                    processStartTime = getClk();
+
+                    if(readyQ[RR_Process_index].waiting_time == -1){
+                    // hasnt run b4
+                    readyQ[RR_Process_index].waiting_time = getClk() - readyQ[RR_Process_index].arrival_time;
+                    }
+
+                    // Log it
+                    char logLine[128];
+                    sprintf(
+                        logLine,
+                        "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                        getClk(), readyQ[RR_Process_index].id, "started", readyQ[RR_Process_index].arrival_time, readyQ[RR_Process_index].runtime,
+                        readyQ[RR_Process_index].remaining_time, readyQ[RR_Process_index].waiting_time
+                    );
+                    fputs(logLine, logsFile);
+
+                    // Run it
+                    pid_t process_pid = fork();
+                    if(process_pid == 0){
+                        char PID[8];
+                        char Runtime[8];
+                        sprintf(PID, "%d", readyQ[RR_Process_index].id);
+                        sprintf(Runtime, "%d", readyQ[RR_Process_index].runtime);
+                        execl("./process.out", "./process.out", PID, Runtime, NULL);
+                    }
+
+                    readyQ[RR_Process_index].sys_pid = process_pid;
+                    //readyQ[RR_Process_index].sys_pid = process_pid;
+                }
+                else
+                {
+                    // Forked and resumed
+                    processStartTime = getClk();
+
+                    char logLine[128];
+                    sprintf(
+                        logLine,
+                        "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                        getClk(), readyQ[RR_Process_index].id, "resumed", readyQ[RR_Process_index].arrival_time, readyQ[RR_Process_index].runtime,
+                        readyQ[RR_Process_index].remaining_time, readyQ[RR_Process_index].waiting_time
+                    );
+                    fputs(logLine, logsFile);
+
+                    kill(readyQ[RR_Process_index].sys_pid, SIGCONT);
+                }
+            }
+            else
+            {
+                // Stoping
+                if(getClk() >= processStartTime + Q){
+                    kill(readyQ[RR_Process_index].sys_pid, SIGSTOP);
+                    processStartTime = -1;
+                    //currentProcess.remaining_time -= Q;
+                    readyQ[RR_Process_index].remaining_time -= Q;
+
+                    char logLine[128];
+                    sprintf(
+                        logLine,
+                        "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                        getClk(), readyQ[RR_Process_index].id, "stopped", readyQ[RR_Process_index].arrival_time, readyQ[RR_Process_index].runtime,
+                        readyQ[RR_Process_index].remaining_time, readyQ[RR_Process_index].waiting_time
+                    );
+                    fputs(logLine, logsFile);
+                }
+            }
+        }
+    }
+}
 /*void RR(cvector_vector_type(struct ProcessInfo) readyQ, int Quantum)
 {
     int Beginning_Time=-1;
@@ -359,6 +475,31 @@ void sigChlidHandler(int signum){
             // HPF
             runningFlag = 0;
             remainingProcesses--;
+        }
+        if(algo == 3){
+            //RR
+            //printf("\n[X] am here!!\n");
+            runningFlag = 0; // test might be deleted
+            remainingProcesses--;
+            currentProcess = readyQ[RR_Process_index];
+            readyQ[RR_Process_index].sys_pid = -2;
+            processStartTime = -1;
+            //cvector_erase(readyQ, indx);
+            // Check if all processes are done 
+            int done = 1;
+            for(int i = 0 ; i < cvector_size(readyQ); i++){
+                if(readyQ[i].sys_pid != -2)
+                    done = 0;
+            }
+
+            if(done == 1){
+                //printf("\nRR 5latht :3 rem p = %d\n", remainingProcesses);
+
+                cvector_free(readyQ);
+
+                printf("\nReady Q size= %ld\n", cvector_size(readyQ));
+                
+            }
         }
 
         total_runtime += currentProcess.runtime;
