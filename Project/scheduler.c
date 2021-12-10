@@ -4,6 +4,7 @@
 void HPF();
 void HPF2();
 void SRTN();
+void SRTN2();
 void RR(int);
 void clearResources(int);
 void sigIntHandler(int);
@@ -22,7 +23,11 @@ int stopSchFlag = 0; // Stops the scheduler at end
 int runningFlag = 0; // Indicates if its currently running or not;
 int pFlag = 0;
 
+//SRTN
+int preFlag = 0;
+
 struct ProcessInfo currentProcess;
+int index_currentProcess;
 
 cvector_vector_type(struct ProcessInfo) readyQ = NULL;
 table* PCB;
@@ -73,7 +78,7 @@ int main(int argc, char * argv[])
     if(algo == 1)
         HPF2();
     else if(algo == 2)
-        SRTN();
+        SRTN2();
     else if(algo == 3){
         int Q;
         sscanf(argv[3], "%d", &Q);
@@ -179,6 +184,111 @@ void SRTN()
                 // //currentPCB->remaining_time -= (getClk() - initialTime);
                 // runningFlag = 0;
                 // cvector_push_back(readyQ, currentProcess);
+            }
+        }
+    }
+}
+
+void SRTN2(){
+    printf("\n== Starting SRTN work ==\n");
+    while(1){
+        sleep(0.1f);
+        if(cvector_empty(readyQ))
+        {
+            // Handle
+            stopSchFlag = (remainingProcesses == 0);
+            if (stopSchFlag && !runningFlag)
+                break;
+            else
+                continue;
+        }
+        else
+        {
+            if(processStartTime == -1){
+                // ready to run
+                currentProcess = readyQ[0];
+                index_currentProcess = 0;
+                // Get the srt process
+                for(int i = 0; i < cvector_size(readyQ); i++){
+                    if(readyQ[i].remaining_time <= currentProcess.remaining_time){
+                        currentProcess = readyQ[i];
+                        index_currentProcess = i;
+                    }
+                } 
+                
+                // pop it
+                cvector_erase(readyQ, index_currentProcess);
+
+                if(currentProcess.sys_pid == -1){
+                    // Has not forked yet
+                    processStartTime = getClk();
+
+                    if(currentProcess.waiting_time == -1){
+                         // hasnt run b4
+                        currentProcess.waiting_time = getClk() - currentProcess.arrival_time;
+
+                        // Log it
+                        char logLine[128];
+                        sprintf(
+                            logLine,
+                            "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                            getClk(), currentProcess.id, "started", currentProcess.arrival_time, currentProcess.runtime,
+                            currentProcess.remaining_time, currentProcess.waiting_time
+                        );
+                        fputs(logLine, logsFile);
+
+                        // Fork it
+                        pid_t process_pid = fork();
+                        if(process_pid == 0){
+                            char PID[8];
+                            char Runtime[8];
+                            sprintf(PID, "%d", currentProcess.id);
+                            sprintf(Runtime, "%d", currentProcess.runtime);
+                            execl("./process.out", "./process.out", PID, Runtime, NULL);
+                        }
+
+                        currentProcess.sys_pid = process_pid;
+                    }
+                }
+                else
+                {
+                    // Forked but resumed
+                    processStartTime = getClk();
+
+                    char logLine[128];
+                    sprintf(
+                        logLine,
+                        "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                        getClk(), currentProcess.id, "resumed", currentProcess.arrival_time, currentProcess.runtime,
+                        currentProcess.remaining_time, currentProcess.waiting_time
+                    );
+                    fputs(logLine, logsFile);
+
+                    kill(currentProcess.sys_pid, SIGCONT);
+                }
+            
+            }
+            else
+            {
+                // Stopping
+                if(getClk() >= processStartTime + 1){
+                    kill(currentProcess.sys_pid, SIGSTOP);
+                    processStartTime = -1;
+
+                    //currentProcess.remaining_time -= Q;
+                    currentProcess.remaining_time -= 1;
+
+                    char logLine[128];
+                    sprintf(
+                        logLine,
+                        "At\ttime\t%d\tprocess\t%d\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
+                        getClk(), currentProcess.id, "stopped", currentProcess.arrival_time, currentProcess.runtime,
+                            currentProcess.remaining_time, currentProcess.waiting_time
+                        );
+                        fputs(logLine, logsFile);
+
+                        cvector_push_back(readyQ, currentProcess);
+                }
             }
         }
     }
@@ -451,6 +561,10 @@ void sigIntHandler(int signum)
         //printf("\n[H] p%d added, at t = %d", M.PI.id, getClk());
     }
 
+    if(algo == 2){
+        if(currentProcess.priority >= 0 && currentProcess.priority <= 10 && M.PI.runtime < currentProcess.runtime)
+            preFlag = 1;
+    }
     // Insert a PCB entry
     // PCB_entry *pcb_p = malloc(sizeof(PCB_entry));
     // pcb_p->id = M.PI.id;
@@ -475,6 +589,14 @@ void sigChlidHandler(int signum){
             // HPF
             runningFlag = 0;
             remainingProcesses--;
+        }
+        if(algo == 2){
+            printf("\n[X] Vector size = %ld\n", cvector_size(readyQ));
+            runningFlag = 0; // test might be deleted
+            remainingProcesses--;
+            processStartTime = -1;
+            currentProcess.sys_pid = -99;
+            cvector_erase(readyQ, index_currentProcess);
         }
         if(algo == 3){
             //RR
